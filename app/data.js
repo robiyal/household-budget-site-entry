@@ -46,6 +46,33 @@ export const history = [
   { month: "November 2026", income: 8500000, expenses: 5275000 }
 ];
 
+// Pengeluaran Oktober 2026 per kategori — dipakai halaman perbandingan.
+// Jumlahnya HARUS sama dengan history Oktober: Rp 5.310.000.
+// Belanja 2.180.000 + Listrik & air 640.000 + Transport 410.000 +
+// Sekolah anak 750.000 + Lain-lain 1.330.000 = 5.310.000.
+export const previousMonth = {
+  month: "Oktober 2026",
+  income: 8500000,
+  expenses: [
+    { category: "Belanja harian", amount: 2180000 },
+    { category: "Listrik & air", amount: 640000 },
+    { category: "Transport", amount: 410000 },
+    { category: "Sekolah anak", amount: 750000 },
+    { category: "Lain-lain", amount: 1330000 }
+  ]
+};
+
+// Urutan tampil kategori di semua tabel perbandingan dan grafik.
+// Dipakai compare.js supaya baris bulan lalu selalu sejajar dengan bulan ini,
+// walau urutan di sumber data berubah.
+export const CATEGORY_ORDER = [
+  "Belanja harian",
+  "Listrik & air",
+  "Transport",
+  "Sekolah anak",
+  "Lain-lain"
+];
+
 export const bills = [
   { name: "Listrik", amount: 420000, dueDay: 10 },
   { name: "Air", amount: 230000, dueDay: 12 },
