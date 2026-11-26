@@ -2,7 +2,7 @@
 // State tersimpan di localStorage (kunci anggaran-keluarga-v1); bila storage
 // kosong atau diblokir, situs tetap tampil dengan data default.
 
-import { household, income, expenses, transactions, history, bills, goals } from "./data.js";
+import { household, income, expenses, transactions, history, bills, goals, previousMonth } from "./data.js";
 import { formatRupiah, sumAmounts, categoryTotals, savings } from "./format.js";
 import { dashboard } from "./views-dashboard.js";
 import { budgetPage } from "./views-budget.js";
@@ -11,6 +11,7 @@ import { billsPage } from "./views-bills.js";
 import { savingsPage } from "./views-savings.js";
 
 const STORAGE_KEY = "anggaran-keluarga-v1";
+const THEME_KEY = "anggaran-keluarga-tema";
 const fmt = { formatRupiah, sumAmounts, categoryTotals, savings };
 
 const BILL_ID_BY_NAME = {
@@ -86,6 +87,7 @@ function buildState() {
     })),
     transactions: [...transactions, ...added],
     history,
+    previousMonth,
     bills: stateBills,
     goals: stateGoals,
     _saved: { addedTransactions: added, budgets, paidBills, savingsAdded },
@@ -222,6 +224,16 @@ document.addEventListener("submit", (event) => {
 });
 
 document.addEventListener("click", (event) => {
+  const themeBtn = event.target.closest("#theme-toggle");
+  if (themeBtn) {
+    toggleTheme();
+    return;
+  }
+  const exportBtn = event.target.closest("#export-json, #export-csv");
+  if (exportBtn) {
+    downloadTransactions(exportBtn.id === "export-csv" ? "csv" : "json");
+    return;
+  }
   const btn = event.target.closest(".mark-paid");
   if (!btn) return;
   const id = btn.getAttribute("data-bill-id");
@@ -231,6 +243,107 @@ document.addEventListener("click", (event) => {
   state = buildState();
   router();
 });
+
+// Unduh transaksi sebagai JSON atau CSV (Blob lokal, tanpa jaringan).
+// Nama berkas menyebut bulan data supaya tidak tertukar bila diunduh
+// berulang kali.
+function downloadTransactions(kind) {
+  const rows = state.transactions;
+  let text;
+  let filename;
+  let type;
+  if (kind === "csv") {
+    const head = "tanggal,nama,kategori,jumlah";
+    const lines = rows.map((t) => {
+      const name = String(t.name || "").replace(/"/g, '""');
+      return `${t.date || ""},"${name}",${t.category || ""},${asNumber(t.amount)}`;
+    });
+    text = [head, ...lines].join("\n");
+    filename = "transaksi-november-2026.csv";
+    type = "text/csv";
+  } else {
+    text = JSON.stringify(rows, null, 2);
+    filename = "transaksi-november-2026.json";
+    type = "application/json";
+  }
+  const blob = new Blob([text], { type });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
+  const msg = document.getElementById("import-message");
+  if (msg) {
+    msg.textContent = `Berkas ${filename} berhasil diunduh (${rows.length} transaksi).`;
+    msg.className = "success";
+  }
+}
+
+// Impor JSON: array transaksi {date, name, category, amount}.
+// Baris tidak valid dilewati dan dilaporkan; yang valid ditambahkan
+// sebagai transaksi baru dan tersimpan di perangkat.
+function importTransactions(file) {
+  const reader = new FileReader();
+  reader.onload = () => {
+    let parsed;
+    try {
+      parsed = JSON.parse(String(reader.result || ""));
+    } catch (e) {
+      const msg = document.getElementById("import-message");
+      if (msg) {
+        msg.textContent = "Berkas bukan JSON yang valid.";
+        msg.className = "alert-error";
+      }
+      return;
+    }
+    if (!Array.isArray(parsed)) {
+      const msg = document.getElementById("import-message");
+      if (msg) {
+        msg.textContent = "Isi JSON harus berupa daftar transaksi.";
+        msg.className = "alert-error";
+      }
+      return;
+    }
+    let added = 0;
+    let skipped = 0;
+    for (const item of parsed) {
+      const date = String((item && (item.date || item.tanggal)) || "").trim();
+      const name = String((item && (item.name || item.nama)) || "").trim();
+      const category = String((item && (item.category || item.kategori)) || "").trim();
+      const amount = Number(item && (item.amount ?? item.jumlah));
+      if (!date || !name || !category || !Number.isFinite(amount) || amount <= 0) {
+        skipped += 1;
+        continue;
+      }
+      state._saved.addedTransactions.push({ date, name, category, amount });
+      added += 1;
+    }
+    const text = `${added} transaksi diimpor.${skipped > 0 ? ` ${skipped} baris dilewati karena tidak valid.` : ""}`;
+    if (added > 0) {
+      writeSaved(state._saved);
+      state = buildState();
+      pendingMessage = { id: "import-message", text };
+      router();
+      return;
+    }
+    const msg = document.getElementById("import-message");
+    if (msg) {
+      msg.textContent = text;
+      msg.className = "success";
+    }
+  };
+  reader.onerror = () => {
+    const msg = document.getElementById("import-message");
+    if (msg) {
+      msg.textContent = "Berkas tidak bisa dibaca.";
+      msg.className = "alert-error";
+    }
+  };
+  reader.readAsText(file);
+}
 
 // Urutkan baris tabel transaksi di tempat, tanpa memuat ulang halaman.
 // Filter kategori tetap dihormati: baris yang tersembunyi tetap tersembunyi.
@@ -263,6 +376,12 @@ function applyCategoryFilter(select) {
 document.addEventListener("change", (event) => {
   const select = event.target;
   if (!select) return;
+  if (select.id === "import-json") {
+    const file = select.files && select.files[0];
+    if (file) importTransactions(file);
+    select.value = "";
+    return;
+  }
   if (select.id === "filter-kategori") {
     applyCategoryFilter(select);
     return;
@@ -271,5 +390,38 @@ document.addEventListener("change", (event) => {
     sortTransactionRows(select.value);
   }
 });
+
+// Mode gelap: tema tersimpan terpisah dari data anggaran (kunci sendiri);
+// default terang. Diterapkan sebelum render pertama supaya tidak berkedip.
+function currentTheme() {
+  try {
+    return window.localStorage.getItem(THEME_KEY) === "gelap" ? "gelap" : "terang";
+  } catch (e) {
+    return "terang";
+  }
+}
+
+function applyTheme(theme) {
+  const root = document.documentElement;
+  if (theme === "gelap") root.setAttribute("data-theme", "dark");
+  else root.removeAttribute("data-theme");
+  const btn = document.getElementById("theme-toggle");
+  if (btn) {
+    btn.textContent = theme === "gelap" ? "Mode terang" : "Mode gelap";
+    btn.setAttribute("aria-pressed", theme === "gelap" ? "true" : "false");
+  }
+}
+
+function toggleTheme() {
+  const next = currentTheme() === "gelap" ? "terang" : "gelap";
+  try {
+    window.localStorage.setItem(THEME_KEY, next);
+  } catch (e) {
+    // Storage diblokir: tema tetap berubah untuk sesi ini.
+  }
+  applyTheme(next);
+}
+
+applyTheme(currentTheme());
 
 router();
