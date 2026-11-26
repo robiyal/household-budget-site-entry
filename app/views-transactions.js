@@ -147,6 +147,14 @@ export function transactionsPage(data, fmt) {
           </select>
         </div>
       </div>
+      <div class="export-row">
+        <button type="button" id="export-json" class="btn btn-secondary">Unduh JSON</button>
+        <button type="button" id="export-csv" class="btn btn-secondary">Unduh CSV</button>
+        <label class="import-label" for="import-json">Impor JSON</label>
+        <input type="file" id="import-json" accept="application/json,.json" />
+        <span id="import-message" role="status" aria-live="polite"></span>
+      </div>
+      <p class="export-note">Unduhan berisi semua transaksi pada tabel ini. Impor menerima file JSON berisi daftar transaksi (tanggal, nama, kategori, jumlah); baris yang tidak valid dilewati dan dilaporkan.</p>
       <div class="table-wrap">
       <table class="transaksi-table">
         <thead>
