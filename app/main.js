@@ -18,7 +18,7 @@ const BILL_ID_BY_NAME = {
   "Air": "air",
   "Internet": "internet",
   "Iuran RT": "iuran-rt",
-  "Sekolah anak": "sekolah-anak"
+  "Sekolah anak": "sekolah-anak",
 };
 
 const CATEGORY_NAME_BY_KEY = {
@@ -26,7 +26,7 @@ const CATEGORY_NAME_BY_KEY = {
   "listrik": "Listrik & air",
   "transport": "Transport",
   "sekolah": "Sekolah anak",
-  "lain": "Lain-lain"
+  "lain": "Lain-lain",
 };
 
 function readSaved() {
@@ -48,6 +48,11 @@ function writeSaved(saved) {
   }
 }
 
+function asNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
 // Bangun state tampilan dari data default + simpanan pengguna.
 function buildState() {
   const saved = readSaved();
@@ -63,14 +68,13 @@ function buildState() {
       name: b.name,
       amount: b.amount,
       dueDay: b.dueDay,
-      status: paidBills.includes(id) ? "Lunas" : "Belum lunas"
+      status: paidBills.includes(id) ? "Lunas" : "Belum lunas",
     };
   });
 
   const stateGoals = goals.map((g) => {
-    const key = g.name;
-    const extra = Number(savingsAdded[key]) || 0;
-    return { id: key, name: g.name, target: g.target, saved: g.saved + extra };
+    const extra = asNumber(savingsAdded[g.name]);
+    return { id: g.name, name: g.name, target: g.target, saved: g.saved + extra };
   });
 
   return {
@@ -78,23 +82,20 @@ function buildState() {
     income,
     expenses: expenses.map((e) => ({
       category: e.category,
-      amount: budgets[e.category] != null ? Number(budgets[e.category]) || 0 : e.amount
+      amount: budgets[e.category] != null ? asNumber(budgets[e.category]) : e.amount,
     })),
     transactions: [...transactions, ...added],
     history,
     bills: stateBills,
     goals: stateGoals,
-    _saved: { addedTransactions: added, budgets, paidBills, savingsAdded }
+    _saved: { addedTransactions: added, budgets, paidBills, savingsAdded },
   };
 }
 
 let state = buildState();
 let pendingMessage = null; // { id: "transaksi-message" | ..., text: "..." }
 
-function render(html) {
-  window.__shotReady = false;
-  const app = document.querySelector("#app");
-  if (app) app.innerHTML = html;
+function markNavCurrent() {
   const hash = window.location.hash || "#/";
   document.querySelectorAll(".site-nav a").forEach((a) => {
     if (a.getAttribute("href") === hash) {
@@ -103,14 +104,24 @@ function render(html) {
       a.removeAttribute("aria-current");
     }
   });
-  if (pendingMessage) {
-    const el = document.getElementById(pendingMessage.id);
-    if (el) {
-      el.textContent = pendingMessage.text;
-      el.className = "success";
-    }
-    pendingMessage = null;
+}
+
+function showPendingMessage() {
+  if (!pendingMessage) return;
+  const el = document.getElementById(pendingMessage.id);
+  if (el) {
+    el.textContent = pendingMessage.text;
+    el.className = "success";
   }
+  pendingMessage = null;
+}
+
+function render(html) {
+  window.__shotReady = false;
+  const app = document.querySelector("#app");
+  if (app) app.innerHTML = html;
+  markNavCurrent();
+  showPendingMessage();
   window.__shotReady = true;
 }
 
@@ -135,17 +146,25 @@ const routes = {
   "#/anggaran": () => budgetPage(state, fmt),
   "#/transaksi": () => transactionsPage(state, fmt),
   "#/tagihan": () => billsPage(state, fmt),
-  "#/tabungan": () => savingsPage(state, fmt)
+  "#/tabungan": () => savingsPage(state, fmt),
 };
 
 function router() {
   const hash = window.location.hash || "#/";
-  if (hash === "#app") return; // tautan "lewati ke konten" — bukan rute.
+  if (hash === "#app") return; // Tautan "lewati ke konten" — bukan rute.
   const view = routes[hash];
   render(view ? view() : notFound());
 }
 
 window.addEventListener("hashchange", router);
+
+function failMessage(id, text) {
+  const msg = document.getElementById(id);
+  if (msg) {
+    msg.textContent = text;
+    msg.className = "alert-error";
+  }
+}
 
 document.addEventListener("submit", (event) => {
   const form = event.target;
@@ -156,12 +175,8 @@ document.addEventListener("submit", (event) => {
     const name = String(form.elements["nama"].value || "").trim();
     const category = form.elements["kategori"].value;
     const amount = Number(form.elements["jumlah"].value);
-    const msg = document.getElementById("transaksi-message");
     if (!name || !Number.isFinite(amount) || amount <= 0) {
-      if (msg) {
-        msg.textContent = "Isi nama dan jumlah yang benar (jumlah harus lebih dari 0).";
-        msg.className = "alert-error";
-      }
+      failMessage("transaksi-message", "Isi nama dan jumlah yang benar (jumlah harus lebih dari 0).");
       return;
     }
     state._saved.addedTransactions.push({ date, name, category, amount });
@@ -176,13 +191,9 @@ document.addEventListener("submit", (event) => {
     event.preventDefault();
     const key = form.elements["category"].value;
     const amount = Number(form.elements["amount"].value);
-    const msg = document.getElementById("budget-message");
     const categoryName = CATEGORY_NAME_BY_KEY[key];
     if (!categoryName || !Number.isFinite(amount) || amount < 0) {
-      if (msg) {
-        msg.textContent = "Pilih kategori dan isi jumlah anggaran yang benar.";
-        msg.className = "alert-error";
-      }
+      failMessage("budget-message", "Pilih kategori dan isi jumlah anggaran yang benar.");
       return;
     }
     state._saved.budgets[categoryName] = amount;
@@ -197,15 +208,11 @@ document.addEventListener("submit", (event) => {
     event.preventDefault();
     const goalId = form.elements["goalId"].value;
     const amount = Number(form.elements["amount"].value);
-    const msg = document.getElementById("savings-message");
     if (!goalId || !Number.isFinite(amount) || amount <= 0) {
-      if (msg) {
-        msg.textContent = "Pilih tujuan dan isi jumlah dana yang benar (lebih dari 0).";
-        msg.className = "alert-error";
-      }
+      failMessage("savings-message", "Pilih tujuan dan isi jumlah dana yang benar (lebih dari 0).");
       return;
     }
-    const current = Number(state._saved.savingsAdded[goalId]) || 0;
+    const current = asNumber(state._saved.savingsAdded[goalId]);
     state._saved.savingsAdded[goalId] = current + amount;
     writeSaved(state._saved);
     state = buildState();
@@ -225,14 +232,44 @@ document.addEventListener("click", (event) => {
   router();
 });
 
-document.addEventListener("change", (event) => {
-  const select = event.target;
-  if (!select || select.id !== "filter-kategori") return;
+// Urutkan baris tabel transaksi di tempat, tanpa memuat ulang halaman.
+// Filter kategori tetap dihormati: baris yang tersembunyi tetap tersembunyi.
+function sortTransactionRows(mode) {
+  const tbody = document.querySelector(".transaksi-table tbody");
+  if (!tbody) return;
+  const rows = [...tbody.querySelectorAll("tr")];
+  const byDate = (row) => row.getAttribute("data-date") || "";
+  const byAmount = (row) => asNumber(row.getAttribute("data-amount"));
+  if (mode === "date-asc") {
+    rows.sort((a, b) => byDate(a).localeCompare(byDate(b)));
+  } else if (mode === "amount-desc") {
+    rows.sort((a, b) => byAmount(b) - byAmount(a));
+  } else if (mode === "amount-asc") {
+    rows.sort((a, b) => byAmount(a) - byAmount(b));
+  } else {
+    rows.sort((a, b) => byDate(b).localeCompare(byDate(a)));
+  }
+  for (const row of rows) tbody.appendChild(row);
+}
+
+function applyCategoryFilter(select) {
   const wanted = select.value;
   document.querySelectorAll(".transaksi-table tbody tr").forEach((row) => {
     const cat = row.getAttribute("data-category") || "";
     row.style.display = !wanted || cat === wanted ? "" : "none";
   });
+}
+
+document.addEventListener("change", (event) => {
+  const select = event.target;
+  if (!select) return;
+  if (select.id === "filter-kategori") {
+    applyCategoryFilter(select);
+    return;
+  }
+  if (select.id === "sort-transaksi") {
+    sortTransactionRows(select.value);
+  }
 });
 
 router();
