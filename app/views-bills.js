@@ -1,6 +1,9 @@
 // views-bills.js — halaman Tagihan: daftar tagihan rutin bulanan dengan
 // jatuh tempo, jumlah, dan status. Menandai lunas tersimpan di perangkat
-// ini (ditangani main.js).
+// ini (ditangani main.js). Badge jatuh tempo dihitung dari tanggal hari
+// ini (due.js): terlambat / hari ini / berapa hari lagi.
+
+import { dueBadge, dueSummary } from "./due.js";
 
 const DEFAULT_BILLS = [
   { id: "listrik", name: "Listrik", amount: 420000, dueDay: 10, status: "Belum lunas" },
@@ -76,11 +79,17 @@ function billItem(bill, fmt) {
   const paid = isPaidStatus(bill.status);
   const statusClass = paid ? "is-paid" : "is-unpaid";
   const disabled = paid ? " disabled" : "";
+  // Tagihan lunas tidak perlu badge tanggal; yang belum lunas diberi tahu
+  // terlambat berapa hari atau jatuh tempo kapan.
+  const badge = paid ? "" : dueBadge(bill, new Date());
+  const badgeHtml = badge
+    ? ` <span class="due-badge due-tone-${esc(badge.tone)}">${esc(badge.text)}</span>`
+    : "";
   return `<li class="bill-item" data-bill-id="${id}">
   <div class="bill-main">
     <strong class="bill-name">${name}</strong>
     <span class="bill-amount">${amountText}</span>
-    <span class="bill-due">${dueText}</span>
+    <span class="bill-due">${dueText}</span>${badgeHtml}
     <span class="bill-status ${statusClass}">${statusText}</span>
   </div>
   <button type="button" class="mark-paid" data-bill-id="${id}"${disabled}>${esc("Tandai lunas")}</button>
@@ -91,11 +100,15 @@ export function billsPage(data, fmt) {
   const bills = resolveBills(data);
   const total = bills.reduce((sum, b) => sum + asNumber(b.amount), 0);
   const unpaid = bills.filter((b) => !isPaidStatus(b.status)).length;
+  const summary = dueSummary(bills, new Date());
+  const overdueNote = summary.overdue > 0
+    ? ` ${summary.overdue} terlambat — bayar dulu yang paling lama.`
+    : "";
   const rows = bills.map((bill) => billItem(bill, fmt)).join("\n");
 
   return `<section class="bills-page">
   <h1>${esc("Tagihan")}</h1>
-  <p class="bills-intro">${esc("Daftar tagihan rutin bulanan.")} Total ${esc(formatBillAmount(total, fmt))} &middot; ${unpaid} dari ${bills.length} belum lunas. Status lunas tersimpan di perangkat ini.</p>
+  <p class="bills-intro">${esc("Daftar tagihan rutin bulanan.")} Total ${esc(formatBillAmount(total, fmt))} &middot; ${unpaid} dari ${bills.length} belum lunas.${esc(overdueNote)} Status lunas tersimpan di perangkat ini.</p>
   <ul class="bills-list">
 ${rows}
   </ul>
