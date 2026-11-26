@@ -1,61 +1,81 @@
+// views-savings.js — halaman Tabungan: kartu tiap tujuan dengan target,
+// dana terkumpul, sisa, dan progres. Dana yang ditambahkan tersimpan di
+// perangkat ini (ditangani main.js).
+
 const DEFAULT_GOALS = [
-  { id: 'dana-darurat', name: 'Dana darurat', target: 10000000, saved: 6400000 },
-  { id: 'liburan', name: 'Liburan', target: 5000000, saved: 2250000 },
-  { id: 'dp-motor', name: 'DP motor', target: 8000000, saved: 1000000 }
+  { id: "dana-darurat", name: "Dana darurat", target: 10000000, saved: 6400000 },
+  { id: "liburan", name: "Liburan", target: 5000000, saved: 2250000 },
+  { id: "dp-motor", name: "DP motor", target: 8000000, saved: 1000000 },
 ];
 
-function escapeHtml(value) {
-  return String(value)
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
+const ESCAPE_TABLE = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;",
+};
+
+function esc(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (ch) => ESCAPE_TABLE[ch]);
 }
 
-function defaultFormat(value) {
-  return 'Rp ' + Number(value).toLocaleString('id-ID');
+function asNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
 }
 
-export function savingsPage(data, fmt) {
-  const format = fmt && typeof fmt.formatRupiah === 'function' ? fmt.formatRupiah : defaultFormat;
-  const goals = Array.isArray(data)
-    ? data
-    : data && Array.isArray(data.goals) && data.goals.length
-      ? data.goals
-      : DEFAULT_GOALS;
+function rupiahFallback(value) {
+  return "Rp " + asNumber(value).toLocaleString("id-ID");
+}
 
-  const cards = goals.map((goal) => {
-    const target = Number(goal.target) || 0;
-    const saved = Number(goal.saved) || 0;
-    const remaining = Math.max(target - saved, 0);
-    const rawPercent = target > 0 ? (saved / target) * 100 : 0;
-    const barPercent = Math.max(0, Math.min(100, rawPercent));
-    const percentLabel = Math.round(rawPercent * 10) / 10;
-    const id = escapeHtml(goal.id != null ? goal.id : goal.name);
-    const name = escapeHtml(goal.name != null ? goal.name : 'Tanpa nama');
+function pickFormatter(fmt) {
+  if (fmt && typeof fmt.formatRupiah === "function") return fmt.formatRupiah;
+  return rupiahFallback;
+}
 
-    return `
+function resolveGoals(data) {
+  if (Array.isArray(data)) return data;
+  if (data && Array.isArray(data.goals) && data.goals.length) return data.goals;
+  return DEFAULT_GOALS;
+}
+
+function goalCard(goal, format) {
+  const target = asNumber(goal.target);
+  const saved = asNumber(goal.saved);
+  const remaining = Math.max(target - saved, 0);
+  const rawPercent = target > 0 ? (saved / target) * 100 : 0;
+  const barPercent = Math.max(0, Math.min(100, rawPercent));
+  const percentLabel = Math.round(rawPercent * 10) / 10;
+  const id = esc(goal.id != null ? goal.id : goal.name);
+  const name = esc(goal.name != null ? goal.name : "Tanpa nama");
+
+  return `
       <article class="savings-card" data-goal-id="${id}">
         <h3 class="savings-card__title">${name}</h3>
         <dl class="savings-card__details">
-          <div><dt>Target</dt><dd>${escapeHtml(format(target))}</dd></div>
-          <div><dt>Terkumpul</dt><dd>${escapeHtml(format(saved))}</dd></div>
-          <div><dt>Sisa</dt><dd>${escapeHtml(format(remaining))}</dd></div>
+          <div><dt>Target</dt><dd>${esc(format(target))}</dd></div>
+          <div><dt>Terkumpul</dt><dd>${esc(format(saved))}</dd></div>
+          <div><dt>Sisa</dt><dd>${esc(format(remaining))}</dd></div>
         </dl>
         <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="100" aria-valuenow="${percentLabel}" aria-label="${name}">
           <div class="progress__bar" style="width: ${barPercent.toFixed(2)}%"></div>
         </div>
         <p class="savings-card__percent">${percentLabel}% tercapai</p>
-      </article>
-    `;
-  }).join('');
+      </article>`;
+}
 
-  const options = goals.map((goal) => {
-    const id = escapeHtml(goal.id != null ? goal.id : goal.name);
-    const name = escapeHtml(goal.name != null ? goal.name : 'Tanpa nama');
-    return `<option value="${id}">${name}</option>`;
-  }).join('');
+export function savingsPage(data, fmt) {
+  const format = pickFormatter(fmt);
+  const goals = resolveGoals(data);
+  const cards = goals.map((goal) => goalCard(goal, format)).join("");
+  const options = goals
+    .map((goal) => {
+      const id = esc(goal.id != null ? goal.id : goal.name);
+      const name = esc(goal.name != null ? goal.name : "Tanpa nama");
+      return `<option value="${id}">${name}</option>`;
+    })
+    .join("");
 
   return `
     <section class="savings-page">
