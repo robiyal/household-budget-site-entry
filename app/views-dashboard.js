@@ -1,8 +1,22 @@
 // views-dashboard.js — Dashboard Anggaran Keluarga Rahmawati.
-// Menampilkan ringkasan pemasukan / pengeluaran / tabungan, grafik batang
-// per kategori, 5 transaksi terbaru, riwayat 6 bulan lengkap dengan baris
-// rata-rata, serta tips hemat yang dihitung langsung dari data keluarga
-// (bukan teks tempelan: semua angka berasal dari data.js).
+// Menampilkan ringkasan pemasukan / pengeluaran / tabungan, grafik tren
+// 6 bulan (SVG), perbandingan bulan ini vs bulan lalu, pengingat tagihan
+// jatuh tempo, grafik batang per kategori, 5 transaksi terbaru, riwayat
+// 6 bulan lengkap dengan baris rata-rata, serta tips hemat yang dihitung
+// langsung dari data keluarga (bukan teks tempelan: semua angka berasal
+// dari data.js).
+
+import { CATEGORY_ORDER } from "./data.js";
+import {
+  compareMonths,
+  totalsComparison,
+  formatDelta,
+  formatPct,
+  deltaClass,
+  bestImprovement,
+} from "./compare.js";
+import { trendChart, trendInsight } from "./views-trend.js";
+import { urgentBills, dueBadge } from "./due.js";
 
 const ESCAPES = {
   "&": "&amp;",
@@ -181,6 +195,102 @@ function savingTips(data, totals, format) {
       </section>`;
 }
 
+// Tabel perbandingan bulan ini vs bulan lalu, per kategori + total.
+// Turun = hemat (hijau), naik = merah; tabungan dibalik (naik = hijau).
+function comparisonTable(data, format) {
+  const prev = data && data.previousMonth;
+  if (!prev || !Array.isArray(prev.expenses)) return "";
+  const expenses = Array.isArray(data.expenses) ? data.expenses : [];
+  const rows = compareMonths(expenses, prev.expenses, CATEGORY_ORDER);
+  const totals = totalsComparison(
+    { expenses, income: asNumber(data.income && data.income.total) },
+    { expenses: prev.expenses, income: asNumber(prev.income) }
+  );
+  const best = bestImprovement(rows);
+  const body = rows
+    .map(
+      (row) => `
+      <tr>
+        <td>${esc(row.category)}</td>
+        <td class="amount">${esc(format(row.current))}</td>
+        <td class="amount">${esc(format(row.previous))}</td>
+        <td class="amount ${deltaClass(row.delta, false)}">${esc(formatDelta(row.delta, format))}</td>
+        <td class="amount ${deltaClass(row.delta, false)}">${esc(formatPct(row.pct))}</td>
+      </tr>`
+    )
+    .join("");
+  return `
+      <section class="card section">
+        <div class="card-head"><h2>Bulan ini vs ${esc(prev.month || "bulan lalu")}</h2></div>
+        <div class="table-wrap">
+          <table class="table compare-table">
+            <thead>
+              <tr><th>Kategori</th><th class="amount">Bulan ini</th><th class="amount">Bulan lalu</th><th class="amount">Selisih</th><th class="amount">%</th></tr>
+            </thead>
+            <tbody>${body}
+            </tbody>
+            <tfoot>
+              <tr>
+                <td>Total pengeluaran</td>
+                <td class="amount">${esc(format(totals.currentTotal))}</td>
+                <td class="amount">${esc(format(totals.previousTotal))}</td>
+                <td class="amount ${deltaClass(totals.expenseDelta, false)}">${esc(formatDelta(totals.expenseDelta, format))}</td>
+                <td class="amount ${deltaClass(totals.expenseDelta, false)}">${esc(formatPct(totals.expensePct))}</td>
+              </tr>
+              <tr>
+                <td>Tabungan</td>
+                <td class="amount">${esc(format(totals.currentSaved))}</td>
+                <td class="amount">${esc(format(totals.previousSaved))}</td>
+                <td class="amount ${deltaClass(totals.savedDelta, true)}">${esc(formatDelta(totals.savedDelta, format))}</td>
+                <td class="amount ${deltaClass(totals.savedDelta, true)}">${esc(formatPct(totals.savedPct))}</td>
+              </tr>
+            </tfoot>
+          </table>
+        </div>
+        <p class="compare-note">Pengeluaran ${totals.expenseDelta <= 0 ? "turun" : "naik"} ${esc(formatDelta(totals.expenseDelta, format))} (${esc(formatPct(totals.expensePct))}) dari ${esc(prev.month || "bulan lalu")}; tabungan ${totals.savedDelta >= 0 ? "naik" : "turun"} ${esc(formatDelta(totals.savedDelta, format))} (${esc(formatPct(totals.savedPct))}).${best ? ` Penghematan terbesar: <strong>${esc(best.category)}</strong> (${esc(formatDelta(best.delta, format))}).` : ""}</p>
+      </section>`;
+}
+
+// Widget pengingat: 2 tagihan belum lunas paling mendesak
+// (paling lama terlambat dulu, lalu jatuh tempo terdekat).
+function remindersSection(data, format) {
+  const bills = Array.isArray(data && data.bills) ? data.bills : [];
+  const urgent = urgentBills(bills, new Date(), 2);
+  if (urgent.length === 0) return "";
+  const items = urgent
+    .map(({ bill }) => {
+      const badge = dueBadge(bill, new Date());
+      return `
+        <li class="reminder-item">
+          <div class="reminder-main">
+            <strong>${esc(bill.name)}</strong>
+            <span class="reminder-amount">${esc(format(bill.amount))}</span>
+          </div>
+          <span class="due-badge due-tone-${esc(badge.tone)}">${esc(badge.text)}</span>
+        </li>`;
+    })
+    .join("");
+  return `
+      <section class="card section reminder-card">
+        <div class="card-head"><h2>Pengingat tagihan</h2><a href="#/tagihan">Lihat semua</a></div>
+        <ul class="reminder-list">${items}
+        </ul>
+      </section>`;
+}
+
+// Wawasan satu kalimat dari tren 6 bulan.
+function trendNote(history, format) {
+  const insight = trendInsight(history);
+  if (!insight) return "";
+  const cheap = insight.cheapest;
+  const rich = insight.richest;
+  const cheapSaved = asNumber(cheap.income) - asNumber(cheap.expenses);
+  const richSaved = asNumber(rich.income) - asNumber(rich.expenses);
+  const same = cheap.month === rich.month;
+  return `
+        <p class="trend-insight">Bulan paling hemat: <strong>${esc(cheap.month)}</strong> (${esc(format(cheap.expenses))}).${same ? ` Tabungan tertinggi juga di bulan itu (${esc(format(cheapSaved))}).` : ` Tabungan tertinggi: <strong>${esc(rich.month)}</strong> (${esc(format(richSaved))}).`}</p>`;
+}
+
 export function dashboard(data, fmt) {
   const format = pickFormatter(fmt);
   const safe = data || {};
@@ -220,6 +330,16 @@ export function dashboard(data, fmt) {
           <span class="summary-note">sisa bulan ini &middot; ${savedPct}% dari pemasukan</span>
         </article>
       </div>
+
+      <section class="card section">
+        <div class="card-head"><h2>Tren 6 bulan</h2></div>
+        ${trendChart(history, format)}
+        ${trendNote(history, format)}
+      </section>
+
+      ${comparisonTable(safe, format)}
+
+      ${remindersSection(safe, format)}
 
       <section class="card section">
         <div class="card-head"><h2>Pengeluaran per kategori</h2></div>
