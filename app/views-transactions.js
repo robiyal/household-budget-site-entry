@@ -1,93 +1,151 @@
-export function transactionsPage(data, fmt) {
-  const escapeHtml = (value) =>
-    String(value ?? '')
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;')
-      .replace(/'/g, '&#39;');
+// views-transactions.js — halaman Transaksi: daftar seluruh pengeluaran
+// November 2026, filter kategori, urutan (terbaru / terlama / jumlah),
+// total yang dihitung dari data, dan formulir tambah transaksi.
 
-  const formatRupiah = (amount) => {
-    const n = Number(amount);
-    if (!Number.isFinite(n)) return 'Rp 0';
-    return 'Rp ' + new Intl.NumberFormat('id-ID', { maximumFractionDigits: 0 }).format(n);
-  };
+const ESCAPES = {
+  "&": "&amp;",
+  "<": "&lt;",
+  ">": "&gt;",
+  '"': "&quot;",
+  "'": "&#39;",
+};
 
-  const formatAmount = (amount) => {
-    if (fmt && typeof fmt.formatRupiah === 'function') {
+const DEFAULT_CATEGORIES = [
+  "Belanja harian",
+  "Listrik & air",
+  "Transport",
+  "Sekolah anak",
+  "Lain-lain",
+];
+
+const SORT_OPTIONS = [
+  { value: "date-desc", label: "Tanggal: terbaru dulu" },
+  { value: "date-asc", label: "Tanggal: terlama dulu" },
+  { value: "amount-desc", label: "Jumlah: terbesar dulu" },
+  { value: "amount-asc", label: "Jumlah: terkecil dulu" },
+];
+
+function esc(value) {
+  return String(value ?? "").replace(/[&<>"']/g, (ch) => ESCAPES[ch]);
+}
+
+function asNumber(value) {
+  const n = Number(value);
+  return Number.isFinite(n) ? n : 0;
+}
+
+function rupiahFallback(amount) {
+  const n = asNumber(amount);
+  return "Rp " + new Intl.NumberFormat("id-ID", { maximumFractionDigits: 0 }).format(n);
+}
+
+function pickAmountFormatter(fmt) {
+  return (amount) => {
+    if (fmt && typeof fmt.formatRupiah === "function") {
       try {
         const formatted = fmt.formatRupiah(amount);
-        if (formatted != null && String(formatted).trim() !== '') {
+        if (formatted != null && String(formatted).trim() !== "") {
           return String(formatted);
         }
       } catch (e) {
-        // fall through to default formatter
+        // Jatuh ke pemformat baku di bawah.
       }
     }
-    return formatRupiah(amount);
+    return rupiahFallback(amount);
   };
+}
 
-  const transactions = Array.isArray(data?.transactions)
-    ? data.transactions
-    : Array.isArray(data)
-      ? data
-      : [];
+function collectTransactions(data) {
+  if (Array.isArray(data && data.transactions)) return data.transactions;
+  if (Array.isArray(data)) return data;
+  return [];
+}
 
-  const defaultCategories = ['Belanja harian', 'Listrik & air', 'Transport', 'Sekolah anak', 'Lain-lain'];
-  let categories = [];
-
-  if (Array.isArray(data?.categories) && data.categories.length) {
-    categories = data.categories.slice(0, 5);
-  } else {
-    const unique = [];
-    for (const t of transactions) {
-      const c = t?.category ?? t?.kategori;
-      if (c && !unique.includes(c)) unique.push(c);
-    }
-    categories = unique.slice(0, 5);
-    for (const c of defaultCategories) {
-      if (categories.length >= 5) break;
-      if (!categories.includes(c)) categories.push(c);
-    }
-    categories = categories.slice(0, 5);
+function collectCategories(data, transactions) {
+  if (Array.isArray(data && data.categories) && data.categories.length) {
+    return data.categories.slice(0, 5);
   }
+  const seen = [];
+  for (const t of transactions) {
+    const c = t && (t.category || t.kategori);
+    if (c && !seen.includes(c)) seen.push(c);
+  }
+  for (const c of DEFAULT_CATEGORIES) {
+    if (seen.length >= 5) break;
+    if (!seen.includes(c)) seen.push(c);
+  }
+  return seen.slice(0, 5);
+}
 
-  const total = transactions.reduce((sum, t) => {
-    const n = Number(t?.amount ?? t?.jumlah);
-    return sum + (Number.isFinite(n) ? n : 0);
-  }, 0);
+function sortTransactions(list, mode) {
+  const sorted = [...list];
+  if (mode === "date-asc") {
+    sorted.sort((a, b) => String(a.date || a.tanggal || "").localeCompare(String(b.date || b.tanggal || "")));
+  } else if (mode === "amount-desc") {
+    sorted.sort((a, b) => asNumber(b.amount ?? b.jumlah) - asNumber(a.amount ?? a.jumlah));
+  } else if (mode === "amount-asc") {
+    sorted.sort((a, b) => asNumber(a.amount ?? a.jumlah) - asNumber(b.amount ?? b.jumlah));
+  } else {
+    sorted.sort((a, b) => String(b.date || b.tanggal || "").localeCompare(String(a.date || a.tanggal || "")));
+  }
+  return sorted;
+}
+
+export function transactionsPage(data, fmt) {
+  const formatAmount = pickAmountFormatter(fmt);
+  const transactions = collectTransactions(data);
+  const categories = collectCategories(data, transactions);
 
   // Total dihitung dari data, bukan ditulis tetap — berubah saat transaksi ditambah.
+  const total = transactions.reduce(
+    (sum, t) => sum + asNumber(t && (t.amount ?? t.jumlah)),
+    0
+  );
   const totalText = formatAmount(total);
 
   const filterOptions = [
     `<option value="">Semua</option>`,
-    ...categories.map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`)
-  ].join('');
+    ...categories.map(
+      (c) => `<option value="${esc(c)}">${esc(c)}</option>`
+    ),
+  ].join("");
 
   const categoryOptions = categories
-    .map((c) => `<option value="${escapeHtml(c)}">${escapeHtml(c)}</option>`)
-    .join('');
+    .map((c) => `<option value="${esc(c)}">${esc(c)}</option>`)
+    .join("");
 
-  const rows = transactions
+  const sortOptions = SORT_OPTIONS.map(
+    (o) => `<option value="${esc(o.value)}">${esc(o.label)}</option>`
+  ).join("");
+
+  const rows = sortTransactions(transactions, "date-desc")
     .map((t) => {
-      const date = escapeHtml(t?.date ?? t?.tanggal ?? '');
-      const name = escapeHtml(t?.name ?? t?.nama ?? '');
-      const category = escapeHtml(t?.category ?? t?.kategori ?? '');
-      const amount = escapeHtml(formatAmount(t?.amount ?? t?.jumlah ?? 0));
-      return `<tr data-category="${category}"><td>${date}</td><td>${name}</td><td>${category}</td><td style="text-align:right">${amount}</td></tr>`;
+      const date = esc(t && (t.date ?? t.tanggal ?? ""));
+      const name = esc(t && (t.name ?? t.nama ?? ""));
+      const category = esc(t && (t.category ?? t.kategori ?? ""));
+      const amount = esc(formatAmount(t && (t.amount ?? t.jumlah ?? 0)));
+      const amountValue = asNumber(t && (t.amount ?? t.jumlah));
+      return `<tr data-category="${category}" data-date="${date}" data-amount="${amountValue}"><td>${date}</td><td>${name}</td><td>${category}</td><td style="text-align:right">${amount}</td></tr>`;
     })
-    .join('');
+    .join("");
 
   return `
     <section class="transaksi-page">
       <h1>Transaksi</h1>
       <p>Semua pengeluaran keluarga di November 2026. Total diperbarui langsung setiap kali transaksi ditambahkan.</p>
-      <div class="filter">
-        <label for="filter-kategori">Filter kategori</label>
-        <select id="filter-kategori" name="kategori">
-          ${filterOptions}
-        </select>
+      <div class="filter-row">
+        <div class="filter">
+          <label for="filter-kategori">Filter kategori</label>
+          <select id="filter-kategori" name="kategori">
+            ${filterOptions}
+          </select>
+        </div>
+        <div class="filter">
+          <label for="sort-transaksi">Urutkan</label>
+          <select id="sort-transaksi" name="urutan">
+            ${sortOptions}
+          </select>
+        </div>
       </div>
       <div class="table-wrap">
       <table class="transaksi-table">
@@ -105,7 +163,7 @@ export function transactionsPage(data, fmt) {
         <tfoot>
           <tr>
             <td colspan="3">Total</td>
-            <td style="text-align:right">${escapeHtml(totalText)}</td>
+            <td style="text-align:right">${esc(totalText)}</td>
           </tr>
         </tfoot>
       </table>
