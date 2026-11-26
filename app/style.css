@@ -26,6 +26,58 @@
     Arial, "Noto Sans", sans-serif;
 }
 
+/* ---------- Mode gelap (V2) ---------- */
+
+[data-theme="dark"] {
+  --green-900: #c4e2d2;
+  --green-800: #2a7a52;
+  --green-700: #4caf7d;
+  --green-100: #22352a;
+  --cream: #181a15;
+  --cream-dark: #23261f;
+  --amber: #eda33c;
+  --amber-dark: #f0a13a;
+  --amber-soft: #3a2a12;
+  --ink: #ece9e0;
+  --ink-soft: #b3ad9f;
+  --line: #3a3f35;
+  --white: #20241f;
+  --danger: #f87171;
+  --shadow: 0 1px 2px rgba(0, 0, 0, 0.3), 0 6px 18px rgba(0, 0, 0, 0.35);
+  --shadow-lift: 0 2px 4px rgba(0, 0, 0, 0.35), 0 12px 28px rgba(0, 0, 0, 0.4);
+}
+
+[data-theme="dark"] body {
+  background-image: radial-gradient(
+    circle at 12% -10%,
+    rgba(237, 163, 60, 0.08),
+    transparent 45%
+  );
+}
+
+[data-theme="dark"] .table tbody tr:hover,
+[data-theme="dark"] .budget-table tbody tr:hover,
+[data-theme="dark"] .transaksi-table tbody tr:hover {
+  background: #2a2f27;
+}
+
+[data-theme="dark"] .alert-success,
+[data-theme="dark"] .success {
+  color: #bbf7d0;
+  background: #14261a;
+  border-color: #2a5a3c;
+}
+
+[data-theme="dark"] .alert-error {
+  color: #fecaca;
+  background: #2b1616;
+  border-color: #5b2323;
+}
+
+[data-theme="dark"] .site-footer {
+  background: #20241f;
+}
+
 /* ---------- Reset & dasar ---------- */
 
 *,
@@ -1168,6 +1220,238 @@ button[type="submit"]:hover,
   margin: 0;
 }
 
+/* ---------- V2: tren, perbandingan, pengingat, ekspor, tema ---------- */
+
+.trend-chart {
+  width: 100%;
+}
+
+.trend-svg {
+  display: block;
+  width: 100%;
+  height: auto;
+}
+
+.trend-grid {
+  stroke: var(--line);
+  stroke-width: 1;
+}
+
+.trend-axis {
+  fill: var(--ink-soft);
+  font-size: 11px;
+}
+
+.trend-value {
+  fill: var(--ink-soft);
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.trend-line {
+  stroke-width: 3;
+  stroke-linejoin: round;
+  stroke-linecap: round;
+}
+
+.trend-line-expense {
+  stroke: var(--amber);
+}
+
+.trend-line-saving {
+  stroke: var(--green-700);
+}
+
+.trend-dot-expense {
+  fill: var(--amber);
+}
+
+.trend-dot-saving {
+  fill: var(--green-700);
+}
+
+.trend-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 1rem;
+  margin-top: 0.75rem;
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+}
+
+.trend-legend span {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.trend-insight {
+  margin: 0.75rem 0 0;
+  font-size: 0.92rem;
+  color: var(--ink-soft);
+}
+
+.compare-note {
+  margin: 0.75rem 0 0;
+  font-size: 0.92rem;
+  color: var(--ink-soft);
+}
+
+.delta-good {
+  color: var(--green-700);
+  font-weight: 600;
+}
+
+.delta-bad {
+  color: var(--danger);
+  font-weight: 600;
+}
+
+.delta-flat {
+  color: var(--ink-soft);
+}
+
+.reminder-card {
+  border-left: 4px solid var(--danger);
+}
+
+.reminder-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.6rem;
+}
+
+.reminder-item {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem 1rem;
+  padding: 0.6rem 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.reminder-item:last-child {
+  border-bottom: none;
+}
+
+.reminder-main {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem 1rem;
+}
+
+.reminder-amount {
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.due-badge {
+  display: inline-block;
+  padding: 0.15rem 0.55rem;
+  border-radius: 999px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+  background: var(--cream-dark);
+  color: var(--ink-soft);
+}
+
+.due-tone-overdue {
+  background: #fdf2f2;
+  color: var(--danger);
+}
+
+.due-tone-today {
+  background: var(--amber-soft);
+  color: var(--amber-dark);
+}
+
+.due-tone-soon,
+.due-tone-paid {
+  background: var(--green-100);
+  color: var(--green-900);
+}
+
+[data-theme="dark"] .due-tone-overdue {
+  background: #3a1d1d;
+  color: #fca5a5;
+}
+
+[data-theme="dark"] .due-tone-today {
+  background: #3a2a12;
+  color: #f0a13a;
+}
+
+.export-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.6rem;
+  margin-bottom: 0.75rem;
+}
+
+.import-label {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+#import-json {
+  width: auto;
+  max-width: 220px;
+  padding: 0.4rem 0.5rem;
+  font-size: 0.85rem;
+}
+
+#import-message {
+  font-size: 0.88rem;
+}
+
+#import-message.success,
+#import-message.alert-error {
+  margin: 0;
+  padding: 0.5rem 0.75rem;
+}
+
+.export-note {
+  font-size: 0.85rem;
+  color: var(--ink-soft);
+  margin: 0 0 1rem;
+}
+
+.theme-toggle {
+  font-family: inherit;
+  font-size: 0.85rem;
+  font-weight: 600;
+  line-height: 1.2;
+  padding: 0.5rem 0.8rem;
+  border: 1px solid rgba(255, 255, 255, 0.4);
+  border-radius: 8px;
+  background: transparent;
+  color: #ffffff;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.theme-toggle:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.coverage-note {
+  margin: 0.25rem 0 0;
+  font-size: 0.92rem;
+  color: var(--ink-soft);
+}
+
+.coverage-note strong {
+  color: var(--green-700);
+}
+
 /* ============================================================
    Responsif — di bawah 600px
    ============================================================ */
@@ -1331,5 +1615,40 @@ button[type="submit"]:hover,
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
+  }
+}
+
+/* ---------- V2: responsif komponen baru ---------- */
+
+@media (max-width: 600px) {
+  .trend-axis,
+  .trend-value {
+    font-size: 10px;
+  }
+
+  .export-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .export-row .btn {
+    width: 100%;
+  }
+
+  #import-json {
+    max-width: none;
+  }
+
+  .theme-toggle {
+    width: 100%;
+  }
+
+  .compare-table {
+    min-width: 520px;
+  }
+
+  .reminder-item {
+    flex-direction: column;
+    align-items: flex-start;
   }
 }
