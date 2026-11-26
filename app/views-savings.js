@@ -65,6 +65,23 @@ function goalCard(goal, format) {
       </article>`;
 }
 
+// Berapa bulan pengeluaran yang ditutup dana darurat saat ini.
+// Dihitung dari dana terkumpul dibagi total pengeluaran bulanan.
+function emergencyCoverage(data, format) {
+  const goals = resolveGoals(data);
+  const emergency = goals.find(
+    (g) => g && (g.id === "dana-darurat" || g.name === "Dana darurat")
+  );
+  if (!emergency) return "";
+  const expenseList = Array.isArray(data && data.expenses) ? data.expenses : [];
+  let monthly = 0;
+  for (const e of expenseList) monthly += asNumber(e.amount);
+  if (monthly <= 0) return "";
+  const months = asNumber(emergency.saved) / monthly;
+  const monthsText = months.toLocaleString("id-ID", { maximumFractionDigits: 1 });
+  return `<p class="coverage-note">Dana darurat ${esc(format(emergency.saved))} mencukupi sekitar <strong>${esc(monthsText)} bulan</strong> pengeluaran (${esc(format(monthly))}/bulan).</p>`;
+}
+
 export function savingsPage(data, fmt) {
   const format = pickFormatter(fmt);
   const goals = resolveGoals(data);
@@ -86,6 +103,7 @@ export function savingsPage(data, fmt) {
       <div class="savings-grid">
         ${cards}
       </div>
+      ${emergencyCoverage(data, format)}
       <form class="savings-form" id="savings-form">
         <h2>Tambah dana</h2>
         <label for="savings-goal">Tujuan</label>
@@ -95,6 +113,7 @@ export function savingsPage(data, fmt) {
         <label for="savings-amount">Jumlah</label>
         <input id="savings-amount" name="amount" type="number" min="1" step="1" inputmode="numeric" placeholder="0" required />
         <button type="submit">Tambah dana</button>
+        <p class="form-hint">Dana ditambahkan ke total terkumpul tujuan yang dipilih.</p>
         <div id="savings-message" role="status" aria-live="polite"></div>
       </form>
     </section>
